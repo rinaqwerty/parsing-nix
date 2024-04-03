@@ -68,7 +68,6 @@ def create_table(url):
         price_from, price_to = dels(price[0].text), dels(price[1].text)
         average_price = average(price_from, price_to)
         record_csv(filename, name, link, price_from, price_to, average_price)
-        print(link)
     print(f'Создан файл "{filename}.csv"')
 
 create_table(url_laptops)
