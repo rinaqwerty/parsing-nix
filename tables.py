@@ -43,7 +43,7 @@ def info_name(url):
     filename = (dels(soup.find(id='price-list-title').text) + '_' + str(date.today())).replace(' ', '_').replace('-', '_')
     return filename
 
-# список значений для заполнения таблицы
+# заполнение таблицы
 def insert_sql(connection, filename, url, names, data):
     with connection.cursor() as cursor:
         src, soup = req(url)
@@ -59,7 +59,7 @@ def insert_sql(connection, filename, url, names, data):
                 query = f"INSERT INTO `{filename}` (name, link, from_price, to_price, average_price) VALUES ('{name}', '{link}', '{price_from}', '{price_to}', '{average_price}');"
                 cursor.execute(query)
 
-# удаление таблицы
+# удаление таблицы (не используется)
 def delete_table(connection, filename):
     with connection.cursor() as cursor:
         query = f'DROP TABLE {filename};'
@@ -77,12 +77,6 @@ def check_exist(connection, filename):
                 if table[key].lower() == filename.lower():
                     return 1
         return 0
-
-# обновление таблицы
-def update_table(connection, filename):
-    with connection.cursor() as cursor:
-        query = f'UPDATE {filename} SET average_price =  WHERE name = ""'
-        cursor.execute(query)
 
 # существующие значения в таблице
 def data_table(connection, filename):
