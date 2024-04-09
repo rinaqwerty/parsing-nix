@@ -17,7 +17,7 @@ def req(url):
     req = requests.get(url, headers=headers)
     src = req.text
     soup = BeautifulSoup(src, 'lxml')
-    return src, soup
+    return soup
 
 # удаление переносов строки
 def dels(text):
@@ -39,14 +39,14 @@ def average(x, y):
 
 # имя файла
 def info_name(url):
-    src, soup = req(url)
+    soup = req(url)
     filename = (dels(soup.find(id='price-list-title').text) + '_' + str(date.today())).replace(' ', '_').replace('-', '_')
     return filename
 
 # заполнение таблицы
 def insert_sql(connection, filename, url, names, data):
     with connection.cursor() as cursor:
-        src, soup = req(url)
+        soup = req(url)
         items = soup.find_all(class_='search-result-row highlight')
         print(len(items))
         for item in items:
