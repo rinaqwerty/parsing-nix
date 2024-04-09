@@ -40,63 +40,69 @@ def average(x, y):
 # имя файла
 def info_name(url):
     src, soup = req(url)
-    filename = dels(soup.find(id='price-list-title').text)+ '_' + str(date.today()).replace(' ', '_').replace('-', '_')
-    # dates = str(date.today()).replace(' ', '_')
+    filename = (dels(soup.find(id='price-list-title').text) + '_' + str(date.today())).replace(' ', '_').replace('-', '_')
     return filename
 
 # список значений для заполнения таблицы
-def insert_sql(cursor, filename, url, names, data):
-    src, soup = req(url)
-    items = soup.find_all(class_='search-result-row highlight')
-    print(len(items))
-    for item in items:
-        link = str('https://www.nix.ru/' + item.find(class_='t').get('href'))
-        name = item.find(class_='t').text
-        price = item.find_all(class_='d tar cell-half-price')
-        price_from, price_to = dels(price[0].text), dels(price[1].text)
-        average_price = average(price_from, price_to)
-        if name in names:
-            upd = data[names.index(name)]
-            # print(upd)
-        else:
-            query = f"INSERT INTO `{filename}` (name, link, from_price, to_price, average_price) VALUES ('{name}', '{link}', '{price_from}', '{price_to}', '{average_price}');"
-            cursor.execute(query)
+def insert_sql(connection, filename, url, names, data):
+    with connection.cursor() as cursor:
+        src, soup = req(url)
+        items = soup.find_all(class_='search-result-row highlight')
+        print(len(items))
+        for item in items:
+            link = str('https://www.nix.ru/' + item.find(class_='t').get('href'))
+            name = item.find(class_='t').text
+            price = item.find_all(class_='d tar cell-half-price')
+            price_from, price_to = dels(price[0].text), dels(price[1].text)
+            average_price = average(price_from, price_to)
+            if name not in names:
+                query = f"INSERT INTO `{filename}` (name, link, from_price, to_price, average_price) VALUES ('{name}', '{link}', '{price_from}', '{price_to}', '{average_price}');"
+                cursor.execute(query)
 
 # удаление таблицы
-def delete_table(filename):
-    query = f'DROP TABLE {filename};'
-    return query
+def delete_table(connection, filename):
+    with connection.cursor() as cursor:
+        query = f'DROP TABLE {filename};'
+        cursor.execute(query)
 
 # проверка существования таблицы
-def check_exist(filename, tables):
-    key = f'Tables_in_{db_name}'
-    for table in tables:
-        if key in table:
-            if table[key].lower() == filename.lower():
-                return 1
-    return 0
+def check_exist(connection, filename):
+    with connection.cursor() as cursor:
+        query = 'SHOW TABLES;'
+        cursor.execute(query)
+        tables = cursor.fetchall()
+        key = f'Tables_in_{db_name}'
+        for table in tables:
+            if key in table:
+                if table[key].lower() == filename.lower():
+                    return 1
+        return 0
 
-def update_table(cursor, filename):
-    update_query = f'UPDATE {filename} SET average_price =  WHERE name = ""'
+# обновление таблицы
+def update_table(connection, filename):
+    with connection.cursor() as cursor:
+        query = f'UPDATE {filename} SET average_price =  WHERE name = ""'
+        cursor.execute(query)
 
 # существующие значения в таблице
-def data_table(cursor, filename):
-    data = []
-    names = []
-    select = f'SELECT * FROM {filename};'
-    cursor.execute(select)
-    rows = cursor.fetchall()
-    for row in rows:
-        dat = []
-        dat.append(row['id'])
-        dat.append(row['name'])
-        dat.append(row['link'])
-        dat.append(row['from_price'])
-        dat.append(row['to_price'])
-        dat.append(row['average_price'])
-        data.append(dat)
-        names.append(row['name'])
-    return data, names
+def data_table(connection, filename):
+    with connection.cursor() as cursor:
+        data = []
+        names = []
+        select = f'SELECT * FROM {filename};'
+        cursor.execute(select)
+        rows = cursor.fetchall()
+        for row in rows:
+            dat = []
+            dat.append(row['id'])
+            dat.append(row['name'])
+            dat.append(row['link'])
+            dat.append(row['from_price'])
+            dat.append(row['to_price'])
+            dat.append(row['average_price'])
+            data.append(dat)
+            names.append(row['name'])
+        return data, names
 
 def main_create(url):
     filename = info_name(url)
@@ -111,29 +117,23 @@ def main_create(url):
         )
         print(f'Подключение к базе данных успешно.')
         try:
-            with connection.cursor() as cursor:
-                query = 'SHOW TABLES;'
-                cursor.execute(query)
-                show_tables = cursor.fetchall()
-                table_exist = check_exist(filename, show_tables)
+            # проверка на существование таблицы
+            table_exist = check_exist(connection, filename)
+            if table_exist == 0:
+                # создание таблицы
+                with connection.cursor() as cursor:
+                    create_table_query = f'CREATE TABLE `{filename}`(id int AUTO_INCREMENT, name varchar(350), link varchar(255), from_price varchar(32), to_price varchar(32), average_price varchar(32), PRIMARY KEY (id));'
+                    cursor.execute(create_table_query)
+                    print(f'таблица "{filename}" создана.')
+            else:
+                print(f'таблица "{filename}" уже существует.')
 
-                if table_exist == 0:
-                    # создание таблицы
-                    with connection.cursor() as cursor:
-                        create_table_query = f'CREATE TABLE `{filename}`(id int AUTO_INCREMENT, name varchar(255), link varchar(255), from_price varchar(32), to_price varchar(32), average_price varchar(32), PRIMARY KEY (id));'
-                        cursor.execute(create_table_query)
-                        print(f'таблица "{filename}" создана.')
-                else:
-                    print(f'таблица "{filename}" уже существует.')
             # сбор данных из таблицы
-            with connection.cursor() as cursor:
-                data, names = data_table(cursor, filename)
-
+            data, names = data_table(connection, filename)
             # заполнение существующей таблицы
-            with connection.cursor() as cursor:
-                insert_sql(cursor, filename, url, names, data)
-                connection.commit()
-                print('данные записаны')
+            insert_sql(connection, filename, url, names, data)
+            connection.commit()
+            print('данные записаны')
 
         finally:
             connection.close()
